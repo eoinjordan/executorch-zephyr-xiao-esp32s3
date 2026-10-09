@@ -59,7 +59,7 @@ jobs:
         run: |
           west init -l executorch-zephyr-xiao-esp32s3
           west update --narrow -o=--depth=1
-          west packages pip --install
+          west packages pip --install --ignore-venv-check
           west blobs fetch hal_espressif
       - name: Zephyr SDK (ESP32-S3 toolchain only)
         run: west sdk install --toolchains xtensa-espressif_esp32s3_zephyr-elf
