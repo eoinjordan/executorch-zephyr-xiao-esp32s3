@@ -29,9 +29,8 @@ jobs:
             /tmp/ci_test_input.h
 
   firmware:
-    name: Build firmware (${{ matrix.board }})
+    name: Build firmware (${{ matrix.board }}${{ matrix.extra }})
     runs-on: ubuntu-latest
-    container: ghcr.io/zephyrproject-rtos/ci:v0.29.1
     strategy:
       fail-fast: false
       matrix:
@@ -41,25 +40,31 @@ jobs:
           - board: xiao_esp32s3/esp32s3/procpu/sense
             extra: ""
           - board: xiao_esp32s3/esp32s3/procpu/sense
-            extra: -DEXTRA_CONF_FILE=camera.conf
-    env:
-      ZEPHYR_SDK_INSTALL_DIR: /opt/toolchains
+            extra: " -DEXTRA_CONF_FILE=camera.conf"
     steps:
       - uses: actions/checkout@v4
         with:
           path: executorch-zephyr-xiao-esp32s3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Zephyr host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends git cmake ninja-build gperf ccache \
+            dfu-util device-tree-compiler wget xz-utils file make gcc libsdl2-dev libmagic1
+      - name: Python dependencies (west + ExecuTorch codegen)
+        run: pip install -r executorch-zephyr-xiao-esp32s3/requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
       - name: West workspace
         run: |
           west init -l executorch-zephyr-xiao-esp32s3
           west update --narrow -o=--depth=1
+          west packages pip --install
           west blobs fetch hal_espressif
-      - name: Host Python deps
-        run: pip install executorch==1.5.1 --extra-index-url https://download.pytorch.org/whl/cpu
+      - name: Zephyr SDK (ESP32-S3 toolchain only)
+        run: west sdk install --toolchains xtensa-espressif_esp32s3_zephyr-elf
       - name: Build
-        run: |
-          west build -p always -b ${{ matrix.board }} executorch-zephyr-xiao-esp32s3/firmware -- ${{ matrix.extra }}
-      - name: Size
-        run: tail -n 20 build/build.log || true
+        run: west build -p always -b ${{ matrix.board }} executorch-zephyr-xiao-esp32s3/firmware --${{ matrix.extra }}
       - uses: actions/upload-artifact@v4
         with:
           name: firmware-${{ strategy.job-index }}
