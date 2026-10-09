@@ -153,7 +153,10 @@ Three checks, each proving one stage of the pipeline:
    `firmware/src/test_input.h` to within 1e-3 (measured: 3.3e-06).
 2. **Firmware builds.** `west build` for the three variants in `.github/workflows/build.yml`
    finishes with the Zephyr memory report and no warnings from the ExecuTorch tree.
-3. **Device agrees with the host.** The serial log shows `SELF-TEST PASS`, which requires the
+3. **Runs without hardware.** The app also builds for `native_sim/native/64`
+   (`west build -b native_sim/native/64 executorch-zephyr-xiao-esp32s3/firmware`, then run
+   `build/zephyr/zephyr.exe`) to try the same self-test on your PC.
+4. **Device agrees with the host.** The serial log shows `SELF-TEST PASS`, which requires the
    predicted class to equal the embedded label and the ESP32's logits to match PyTorch to
    within 1e-3.
 
@@ -206,7 +209,7 @@ Only the five operator kernels used by the model are linked; `zephyr.map` lists
 
 The method pool is generous for this model. The boot log prints `planned buffer 0: N bytes`
 and `pool used X / Y`; set `CONFIG_EXECUTORCH_METHOD_ALLOCATOR_POOL_SIZE` a little above X
-if you need the SRAM back (the camera build already does this in `camera.conf`).
+if you need the SRAM back.
 
 The `inference:` line in the boot log is the number to compare against other runtimes on the
 same board.
