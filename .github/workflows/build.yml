@@ -1,0 +1,69 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  train-export:
+    name: Train and export (host)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install executorch==1.5.1 torchvision --extra-index-url https://download.pytorch.org/whl/cpu
+      - name: Train (smoke) and export
+        run: python train/train_mnist.py --epochs 1 --limit 10000 --pte /tmp/ci.pte --header /tmp/ci_test_input.h --state-dict /tmp/ci.pt
+      - name: Run committed .pte on the host runtime
+        run: python train/run_pte_host.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-model
+          path: |
+            /tmp/ci.pte
+            /tmp/ci_test_input.h
+
+  firmware:
+    name: Build firmware (${{ matrix.board }})
+    runs-on: ubuntu-latest
+    container: ghcr.io/zephyrproject-rtos/ci:v0.29.1
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - board: xiao_esp32s3/esp32s3/procpu
+            extra: ""
+          - board: xiao_esp32s3/esp32s3/procpu/sense
+            extra: ""
+          - board: xiao_esp32s3/esp32s3/procpu/sense
+            extra: -DEXTRA_CONF_FILE=camera.conf
+    env:
+      ZEPHYR_SDK_INSTALL_DIR: /opt/toolchains
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: executorch-zephyr-xiao-esp32s3
+      - name: West workspace
+        run: |
+          west init -l executorch-zephyr-xiao-esp32s3
+          west update --narrow -o=--depth=1
+          west blobs fetch hal_espressif
+      - name: Host Python deps
+        run: pip install executorch==1.5.1 --extra-index-url https://download.pytorch.org/whl/cpu
+      - name: Build
+        run: |
+          west build -p always -b ${{ matrix.board }} executorch-zephyr-xiao-esp32s3/firmware -- ${{ matrix.extra }}
+      - name: Size
+        run: tail -n 20 build/build.log || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ strategy.job-index }}
+          path: |
+            build/zephyr/zephyr.bin
+            build/zephyr/zephyr.elf
+            build/zephyr/zephyr.map

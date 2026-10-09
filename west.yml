@@ -1,0 +1,35 @@
+# Copyright (c) 2026 Eoin Jordan
+# SPDX-License-Identifier: Apache-2.0
+#
+# West manifest for a self-contained workspace:
+#
+#   west init -m https://github.com/eoinjordan/executorch-zephyr-xiao-esp32s3 ws
+#   cd ws && west update
+#
+# Pulls Zephyr (only the Espressif HAL from its manifest) and ExecuTorch as
+# the external module documented at
+# https://docs.zephyrproject.org/latest/develop/manifest/external/executorch.html
+
+manifest:
+  remotes:
+    - name: zephyrproject-rtos
+      url-base: https://github.com/zephyrproject-rtos
+    - name: pytorch
+      url-base: https://github.com/pytorch
+
+  projects:
+    - name: zephyr
+      remote: zephyrproject-rtos
+      revision: v4.4.0
+      import:
+        name-allowlist:
+          - hal_espressif
+
+    - name: executorch
+      remote: pytorch
+      revision: v1.5.1
+      path: modules/lib/executorch
+      submodules: true
+
+  self:
+    path: executorch-zephyr-xiao-esp32s3

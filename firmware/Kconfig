@@ -1,0 +1,46 @@
+# Copyright (c) 2026 Eoin Jordan
+# SPDX-License-Identifier: Apache-2.0
+
+source "Kconfig.zephyr"
+
+menu "ExecuTorch XIAO ESP32S3 sample"
+
+config EXECUTORCH_METHOD_ALLOCATOR_POOL_SIZE
+	int "Method allocator pool size in bytes"
+	default 131072
+	depends on EXECUTORCH
+	help
+	  Static pool used for the Method instance, its metadata and the
+	  memory-planned activation buffers. TinyDigitNet needs well under
+	  64 KiB; the default leaves room for a bigger model.
+
+config EXECUTORCH_TEMP_ALLOCATOR_POOL_SIZE
+	int "Temporary allocator pool size in bytes"
+	default 16384
+	depends on EXECUTORCH
+	help
+	  Scratch pool for temporary allocations inside kernels. Reset after
+	  every kernel call.
+
+config APP_CAMERA
+	bool "Classify live frames from the OV2640 camera"
+	depends on VIDEO
+	help
+	  After the embedded self-test, grab RGB565 frames from the camera
+	  (XIAO ESP32S3 Sense), centre-crop, downsample to 28x28, invert and
+	  normalise, then run the model on each frame. Enable with
+	  -DEXTRA_CONF_FILE=camera.conf on the Sense board target.
+
+config APP_CAMERA_INTERVAL_MS
+	int "Delay between camera inferences in milliseconds"
+	default 1000
+	depends on APP_CAMERA
+
+config APP_CAMERA_SWAP_BYTES
+	bool "Treat RGB565 frames as big-endian"
+	depends on APP_CAMERA
+	help
+	  Enable if the ASCII preview printed by the firmware looks like noise.
+	  The DVP interface may deliver RGB565 with the two bytes swapped.
+
+endmenu
