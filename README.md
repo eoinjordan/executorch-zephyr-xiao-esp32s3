@@ -6,20 +6,17 @@ and run it on a Seeed Studio **XIAO ESP32S3 (Sense)** under **Zephyr RTOS** usin
 
 ![Seeed XIAO ESP32-S3 Sense at a glance](docs/images/board.png)
 
+*Board overview source: [docs/diagrams/board.drawio](docs/diagrams/board.drawio), editable in draw.io.*
+
 The upstream module and its `hello-executorch` sample are written around Arm Cortex-M and
 Ethos-U. This repo shows the same module building for an **Xtensa LX7** part with no Arm
 pieces at all: fp32 portable kernels, selective operator linking, the model embedded in
 flash, and an optional live loop that classifies frames from the Sense board's OV2640
 camera.
 
-```
-PyTorch (TinyDigitNet, MNIST)  ──torch.export──▶  .pte (portable ops, 63 KB)
-                                                       │
-            firmware/CMakeLists.txt: gen_oplist ◀──────┤  only the 5 ops in the
-            + pte_to_header.py  ──▶ model_pte.h        │  model get linked
-                                                       ▼
-                 west build -b xiao_esp32s3/esp32s3/procpu/sense  ──▶  zephyr.bin
-```
+![overview](docs/images/overview.png)
+
+*Diagram source: [docs/diagrams/overview.drawio](docs/diagrams/overview.drawio), editable in [draw.io](https://www.drawio.com/); re-export to `docs/images/overview.png`.*
 
 ## What you get
 
