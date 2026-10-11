@@ -4,6 +4,8 @@ Train a PyTorch model, export it with [ExecuTorch](https://github.com/pytorch/ex
 and run it on a Seeed Studio **XIAO ESP32S3 (Sense)** under **Zephyr RTOS** using the
 [ExecuTorch Zephyr module](https://docs.zephyrproject.org/latest/develop/manifest/external/executorch.html).
 
+![Seeed XIAO ESP32-S3 Sense at a glance](docs/images/board.png)
+
 The upstream module and its `hello-executorch` sample are written around Arm Cortex-M and
 Ethos-U. This repo shows the same module building for an **Xtensa LX7** part with no Arm
 pieces at all: fp32 portable kernels, selective operator linking, the model embedded in
@@ -124,6 +126,10 @@ self-test: embedded MNIST image, label 7
 SELF-TEST PASS
 inference: ... us average over 10 runs
 ```
+
+![console](docs/images/console.png)
+
+*The serial output above, rendered.*
 
 If the chip stays in download mode after flashing, use `west flash --reset-type watchdog-reset`.
 
