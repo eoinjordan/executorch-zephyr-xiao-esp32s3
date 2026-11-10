@@ -41,6 +41,11 @@ jobs:
             extra: ""
           - board: xiao_esp32s3/esp32s3/procpu/sense
             extra: " -DEXTRA_CONF_FILE=camera.conf"
+          - board: xiao_esp32s3/esp32s3/procpu/sense
+            shield: " --shield seeed_xiao_round_display"
+            extra: ' "-DEXTRA_CONF_FILE=camera.conf;display.conf" -DEXTRA_DTC_OVERLAY_FILE=round_display.overlay'
+          - board: xiao_esp32s3/esp32s3/procpu
+            extra: " -DAPP_CMSIS_NN=OFF"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,7 +69,7 @@ jobs:
       - name: Zephyr SDK (ESP32-S3 toolchain only)
         run: west sdk install --toolchains xtensa-espressif_esp32s3_zephyr-elf
       - name: Build
-        run: west build -p always -b ${{ matrix.board }} executorch-zephyr-xiao-esp32s3/firmware --${{ matrix.extra }}
+        run: west build -p always -b ${{ matrix.board }}${{ matrix.shield }} executorch-zephyr-xiao-esp32s3/firmware --${{ matrix.extra }}
       - uses: actions/upload-artifact@v4
         with:
           name: firmware-${{ strategy.job-index }}

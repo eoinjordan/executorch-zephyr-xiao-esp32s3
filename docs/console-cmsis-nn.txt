@@ -1,0 +1,42 @@
+ExecuTorch on xiao_esp32s3/esp32s3/procpu/sense (Zephyr 4.4.0)
+portable   62888 bytes in flash,  52928 planned, pool  59584 of  73728 bytes used
+cmsis-nn   22344 bytes in flash,   6768 planned, pool  14688 of  32768 bytes used
+
+portable self-test: embedded MNIST image, label 7
+  logit[0] =   -1.2525
+  logit[1] =   -2.3244
+  logit[2] =    4.0803
+  logit[3] =    2.5802
+  logit[4] =   -5.6759
+  logit[5] =   -5.8199
+  logit[6] =   -7.9416
+  logit[7] =   10.5990  <-- argmax
+  logit[8] =   -2.2308
+  logit[9] =   -0.1515
+  predicted 7, expected 7, max |esp32 - pytorch| = 2.86e-06 (limit 1.00e-03)
+portable SELF-TEST PASS
+portable inference: 92741 us average over 10 runs
+
+cmsis-nn self-test: embedded MNIST image, label 7
+  logit[0] =   -1.2006
+  logit[1] =   -2.2512
+  logit[2] =    4.0521
+  logit[3] =    2.5513
+  logit[4] =   -5.7030
+  logit[5] =   -5.8530
+  logit[6] =   -8.1042
+  logit[7] =   10.5054  <-- argmax
+  logit[8] =   -2.2512
+  logit[9] =   -0.1501
+  predicted 7, expected 7, max |esp32 - pytorch| = 4.77e-07 (limit 3.75e-01)
+cmsis-nn SELF-TEST PASS
+cmsis-nn inference: 9306 us average over 10 runs
+
+int8 on CMSIS-NN is 9.96x the speed of fp32 on the portable kernels, in 35% of the flash
+screen: gc9a01@0 240x240, pixel format 0x10
+digit 8 (cmsis-nn, 10108 us), 8 (portable, 93121 us)
+digit 8 (cmsis-nn, 10089 us), 8 (portable, 93035 us)
+digit 0 (cmsis-nn, 10083 us), 0 (portable, 93042 us)
+[00:00:02.032,000] <inf> app_camera: camera lcd_cam_dvp: RGBP 160x120 pitch=320 size=38400
+[00:00:02.032,000] <inf> app_camera: camera streaming
+[00:00:02.330,000] <wrn> video_esp32_lcd_cam: Frame dropped. No buffer available

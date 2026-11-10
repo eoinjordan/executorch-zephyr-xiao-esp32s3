@@ -110,18 +110,24 @@ Expected serial output (abridged):
 
 ```
 ExecuTorch on xiao_esp32s3/esp32s3/procpu/sense (Zephyr 4.4.0)
-model: 62888 bytes in flash, method pool 131072 B, temp pool 16384 B
-I [executorch:main.cpp:...] planned buffer 0: ... bytes
-I [executorch:main.cpp:...] method 'forward' loaded; pool used ... / 131072 bytes
+portable   62888 bytes in flash,  52928 planned, pool  59584 of  73728 bytes used
+cmsis-nn   22344 bytes in flash,   6768 planned, pool  14688 of  32768 bytes used
 
-self-test: embedded MNIST image, label 7
-  logit[0] =   -1.2525
+portable self-test: embedded MNIST image, label 7
   ...
   logit[7] =   10.5990  <-- argmax
   ...
-  predicted 7, expected 7, max |esp32 - pytorch| = 3.3e-06, ... us
-SELF-TEST PASS
-inference: ... us average over 10 runs
+  predicted 7, expected 7, max |esp32 - pytorch| = 2.86e-06 (limit 1.00e-03)
+portable SELF-TEST PASS
+portable inference: 92741 us average over 10 runs
+
+cmsis-nn self-test: embedded MNIST image, label 7
+  ...
+  predicted 7, expected 7, max |esp32 - pytorch| = 4.77e-07 (limit 3.75e-01)
+cmsis-nn SELF-TEST PASS
+cmsis-nn inference: 9306 us average over 10 runs
+
+int8 on CMSIS-NN is 9.96x the speed of fp32 on the portable kernels, in 35% of the flash
 ```
 
 ![console](docs/images/console.png)
@@ -146,6 +152,69 @@ is the quickest way to tune framing and lighting. If the preview looks like nois
 
 This is a demonstration of the sensor-to-tensor path, not a robust digit reader: the model was
 trained on MNIST, so expect it to be picky about stroke width and contrast.
+
+### 6. CMSIS-NN kernels on the ESP32-S3
+
+The firmware embeds the network twice: `mnist_tiny.pte` in fp32 on the portable kernels,
+and `mnist_tiny_cmsis_nn.pte` in int8 on ExecuTorch's `cortex_m` operators, which call
+CMSIS-NN. CMSIS-NN is Arm's library, and the ESP32-S3 is an Xtensa LX7. It works because
+CMSIS-NN has a plain C code path beside its DSP and Helium ones, and nothing in ExecuTorch's
+Cortex-M backend needs an Arm core. Three things make it build here:
+
+- `train/export_cmsis_nn.py` quantises with the `CortexMQuantizer` and targets the plain C
+  path (`CortexMTargetConfig(cpu=CortexM.M0PLUS)`, the backend it calls `SCALAR`). The model
+  is exported in channels-last layout: in the default layout the quantizer leaves every
+  convolution in float.
+- `firmware/CMakeLists.txt` sets `EXECUTORCH_BUILD_CORTEX_M` before the Zephyr module is
+  read, because the module only turns the backend on for `CONFIG_CPU_CORTEX_M`.
+- `west.yml` adds Zephyr's `cmsis-nn` module to the workspace, which the ExecuTorch build
+  picks up.
+
+```bash
+python train/export_cmsis_nn.py     # after train/train_mnist.py
+```
+
+Measured on a XIAO ESP32S3 Sense at 240 MHz, Zephyr 4.4.0, ExecuTorch 1.5.1, built with
+`CONFIG_SPEED_OPTIMIZATIONS=y`. The console is in [docs/console-cmsis-nn.txt](docs/console-cmsis-nn.txt).
+
+| | fp32, portable kernels | int8, CMSIS-NN (plain C) |
+|---|---|---|
+| Program in flash | 62,888 bytes | 22,344 bytes |
+| Planned tensor memory | 52,928 bytes | 6,768 bytes |
+| Method pool used | 59,584 bytes | 14,688 bytes |
+| Inference, average of 10 | 92.7 ms | 9.3 ms |
+| Self-test against PyTorch | 2.9e-06 | 4.8e-07 (quantised reference) |
+| MNIST test accuracy (PyTorch, 10,000 images) | 97.46 % | 97.46 % |
+
+The int8 program is 10 times as fast in 35 % of the flash. The portable kernels are
+reference implementations, which is most of that gap; CMSIS-NN in plain C uses no SIMD
+either, so this is not the ceiling for the chip.
+
+`-DAPP_CMSIS_NN=OFF` builds the firmware with the fp32 program only, as before.
+
+### 7. Round display
+
+With the [Seeed Studio Round Display for XIAO](https://wiki.seeedstudio.com/get_start_round_display/)
+(GC9A01, 240 x 240) under the board, the firmware shows what the model is given, the digit,
+and the time each program took:
+
+```bash
+west build -p always -b xiao_esp32s3/esp32s3/procpu/sense --shield seeed_xiao_round_display \
+  executorch-zephyr-xiao-esp32s3/firmware -- \
+  "-DEXTRA_CONF_FILE=camera.conf;display.conf" -DEXTRA_DTC_OVERLAY_FILE=round_display.overlay
+west flash && west espressif monitor
+```
+
+The picture is drawn in bands of 40 rows, so the screen costs 19 KiB of RAM where a frame
+buffer would cost 115 KiB. This build uses 586,244 bytes of flash and 373,080 of the
+399,108 bytes of internal RAM (camera buffers, both programs, the band). Three squares at
+the bottom must be red, green and blue from left to right; if they are not, set
+`CONFIG_APP_SCREEN_SWAP_BYTES=n`. The camera crop is contrast-stretched before it is
+inverted, so plain paper stays dark.
+
+Windows: with size optimisation GCC uses the size-optimised libstdc++ headers, whose path
+in the ESP32-S3 toolchain is longer than the 260 characters Windows allows by default. The
+firmware builds for speed, which avoids them.
 
 ## Verify
 
