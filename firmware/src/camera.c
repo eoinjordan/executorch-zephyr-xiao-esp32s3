@@ -26,6 +26,10 @@ LOG_MODULE_REGISTER(app_camera, CONFIG_LOG_DEFAULT_LEVEL);
 static const struct device *const cam = DEVICE_DT_GET(DT_CHOSEN(zephyr_camera));
 static struct video_format fmt = {.type = VIDEO_BUF_TYPE_OUTPUT};
 
+static void grab_thread(void *a, void *b, void *c);
+K_THREAD_STACK_DECLARE(grab_stack, 2048);
+static struct k_thread grab_data;
+
 int app_camera_init(void)
 {
 	struct video_caps caps = {.type = VIDEO_BUF_TYPE_OUTPUT};
@@ -93,6 +97,9 @@ int app_camera_init(void)
 		return ret;
 	}
 	LOG_INF("camera streaming");
+	k_thread_create(&grab_data, grab_stack, K_THREAD_STACK_SIZEOF(grab_stack), grab_thread, NULL, NULL, NULL,
+			K_PRIO_COOP(2), 0, K_NO_WAIT); /* above main: it must run during an inference */
+	k_thread_name_set(&grab_data, "camera");
 	return 0;
 }
 
@@ -113,7 +120,16 @@ static inline uint8_t rgb565_to_gray(const uint8_t *p)
 	return (uint8_t)((77 * r + 150 * g + 29 * b) >> 8);
 }
 
-int app_camera_capture(float *out, uint8_t *preview, float mean, float std)
+/* The newest frame, already reduced to 28x28. A thread keeps it fresh so the
+ * driver always gets its buffers back at once: with two buffers it drops a
+ * frame, and then stops delivering, whenever a buffer is held for longer than
+ * a frame period, and one inference takes several.
+ */
+static uint8_t latest[APP_IMG_SIDE * APP_IMG_SIDE];
+static K_MUTEX_DEFINE(latest_lock);
+static K_SEM_DEFINE(latest_ready, 0, 1);
+
+static int grab(void)
 {
 	struct video_buffer *vbuf = NULL;
 	struct video_buffer tmp = {.type = VIDEO_BUF_TYPE_OUTPUT};
@@ -134,7 +150,6 @@ int app_camera_capture(float *out, uint8_t *preview, float mean, float std)
 	const uint8_t *frame = vbuf->buffer;
 
 	static uint8_t gray[APP_IMG_SIDE * APP_IMG_SIDE];
-	uint32_t lo = 255, hi = 0;
 
 	for (uint32_t oy = 0; oy < APP_IMG_SIDE; oy++) {
 		uint32_t ya = y0 + (oy * side) / APP_IMG_SIDE;
@@ -156,9 +171,51 @@ int app_camera_capture(float *out, uint8_t *preview, float mean, float std)
 			uint32_t v = n ? sum / n : 0;
 
 			gray[oy * APP_IMG_SIDE + ox] = (uint8_t)v;
-			lo = MIN(lo, v);
-			hi = MAX(hi, v);
 		}
+	}
+
+	ret = video_enqueue(cam, vbuf);
+	if (ret < 0) {
+		LOG_ERR("video_enqueue: %d", ret);
+		return ret;
+	}
+
+	k_mutex_lock(&latest_lock, K_FOREVER);
+	memcpy(latest, gray, sizeof(latest));
+	k_mutex_unlock(&latest_lock);
+	k_sem_give(&latest_ready);
+
+	return 0;
+}
+
+static void grab_thread(void *a, void *b, void *c)
+{
+	ARG_UNUSED(a);
+	ARG_UNUSED(b);
+	ARG_UNUSED(c);
+
+	while (grab() == 0) {
+	}
+}
+
+K_THREAD_STACK_DEFINE(grab_stack, 2048);
+
+int app_camera_capture(float *out, uint8_t *preview, float mean, float std)
+{
+	static uint8_t gray[APP_IMG_SIDE * APP_IMG_SIDE];
+	uint32_t lo = 255, hi = 0;
+
+	if (k_sem_take(&latest_ready, K_MSEC(2000)) != 0) {
+		LOG_ERR("no frame from the camera");
+		return -EIO;
+	}
+	k_mutex_lock(&latest_lock, K_FOREVER);
+	memcpy(gray, latest, sizeof(gray));
+	k_mutex_unlock(&latest_lock);
+
+	for (uint32_t i = 0; i < APP_IMG_SIDE * APP_IMG_SIDE; i++) {
+		lo = MIN(lo, (uint32_t)gray[i]);
+		hi = MAX(hi, (uint32_t)gray[i]);
 	}
 
 	/* Stretch the contrast so that paper is 0 and the darkest ink 255 after
@@ -179,9 +236,5 @@ int app_camera_capture(float *out, uint8_t *preview, float mean, float std)
 		out[i] = ((float)v / 255.0f - mean) / std;
 	}
 
-	ret = video_enqueue(cam, vbuf);
-	if (ret < 0) {
-		LOG_ERR("video_enqueue: %d", ret);
-	}
-	return ret;
+	return 0;
 }
