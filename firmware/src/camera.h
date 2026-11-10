@@ -17,9 +17,10 @@ extern "C" {
 int app_camera_init(void);
 
 /* Block for the next frame, centre-crop to a square, box-downsample to
- * 28x28 grayscale, invert (MNIST is light-on-dark) and normalise with
- * (x/255 - mean) / std into `out` (row-major, 784 floats). `preview`, if not
- * NULL, receives the 28x28 8-bit grayscale image before normalisation.
+ * 28x28 grayscale, stretch the contrast, invert (MNIST is light-on-dark) and
+ * normalise with (x/255 - mean) / std into `out` (row-major, 784 floats).
+ * `preview`, if not NULL, receives the 28x28 8-bit image the model is given,
+ * before normalisation.
  */
 int app_camera_capture(float *out, uint8_t *preview, float mean, float std);
 

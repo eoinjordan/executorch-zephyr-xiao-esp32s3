@@ -133,6 +133,9 @@ int app_camera_capture(float *out, uint8_t *preview, float mean, float std)
 	const uint32_t y0 = (h - side) / 2;
 	const uint8_t *frame = vbuf->buffer;
 
+	static uint8_t gray[APP_IMG_SIDE * APP_IMG_SIDE];
+	uint32_t lo = 255, hi = 0;
+
 	for (uint32_t oy = 0; oy < APP_IMG_SIDE; oy++) {
 		uint32_t ya = y0 + (oy * side) / APP_IMG_SIDE;
 		uint32_t yb = y0 + ((oy + 1) * side) / APP_IMG_SIDE;
@@ -150,15 +153,30 @@ int app_camera_capture(float *out, uint8_t *preview, float mean, float std)
 					n++;
 				}
 			}
-			uint8_t gray = n ? (uint8_t)(sum / n) : 0;
-			/* Dark ink on light paper -> light digit on dark, like MNIST */
-			uint8_t inv = 255 - gray;
+			uint32_t v = n ? sum / n : 0;
 
-			if (preview) {
-				preview[oy * APP_IMG_SIDE + ox] = inv;
-			}
-			out[oy * APP_IMG_SIDE + ox] = ((float)inv / 255.0f - mean) / std;
+			gray[oy * APP_IMG_SIDE + ox] = (uint8_t)v;
+			lo = MIN(lo, v);
+			hi = MAX(hi, v);
 		}
+	}
+
+	/* Stretch the contrast so that paper is 0 and the darkest ink 255 after
+	 * inversion (MNIST is light strokes on dark), and push light paper noise
+	 * to the background. A page with nothing on it stays dark.
+	 */
+	const uint32_t range = hi > lo + 16 ? hi - lo : 16;
+
+	for (uint32_t i = 0; i < APP_IMG_SIDE * APP_IMG_SIDE; i++) {
+		int32_t v = 255 - (int32_t)((gray[i] - lo) * 255u / range);
+
+		if (v < 64) {
+			v = 0;
+		}
+		if (preview) {
+			preview[i] = (uint8_t)v;
+		}
+		out[i] = ((float)v / 255.0f - mean) / std;
 	}
 
 	ret = video_enqueue(cam, vbuf);

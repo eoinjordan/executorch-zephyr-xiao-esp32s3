@@ -1,0 +1,15 @@
+/*
+ * Copyright (c) 2026 Eoin Jordan
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Addition to the seeed_xiao_round_display shield for this application.
+ */
+
+#include <freq.h>
+
+/* The shield asks for 100 MHz. The panel sits on header pins; 40 MHz sends a
+ * full frame in 23 ms and leaves margin.
+ */
+&gc9a01_xiao_round_display {
+	mipi-max-frequency = <DT_FREQ_M(40)>;
+};
