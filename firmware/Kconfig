@@ -6,21 +6,36 @@ source "Kconfig.zephyr"
 menu "ExecuTorch XIAO ESP32S3 sample"
 
 config EXECUTORCH_METHOD_ALLOCATOR_POOL_SIZE
-	int "Method allocator pool size in bytes"
-	default 131072
+	int "Method allocator pool size of the fp32 program in bytes"
+	default 98304
 	depends on EXECUTORCH
 	help
 	  Static pool used for the Method instance, its metadata and the
-	  memory-planned activation buffers. TinyDigitNet needs well under
-	  64 KiB; the default leaves room for a bigger model.
+	  memory-planned activation buffers. The fp32 TinyDigitNet uses about
+	  60 KiB of it.
 
 config EXECUTORCH_TEMP_ALLOCATOR_POOL_SIZE
-	int "Temporary allocator pool size in bytes"
+	int "Temporary allocator pool size of the fp32 program in bytes"
 	default 16384
 	depends on EXECUTORCH
 	help
 	  Scratch pool for temporary allocations inside kernels. Reset after
 	  every kernel call.
+
+config APP_CMSIS_NN_METHOD_POOL_SIZE
+	int "Method allocator pool size of the int8 program in bytes"
+	default 32768
+	help
+	  As above, for the quantised program that runs on the CMSIS-NN
+	  kernels. Its tensors are a quarter of the size of the fp32 ones.
+	  Unused when the firmware is built with -DAPP_CMSIS_NN=OFF.
+
+config APP_CMSIS_NN_TEMP_POOL_SIZE
+	int "Temporary allocator pool size of the int8 program in bytes"
+	default 16384
+	help
+	  Scratch pool of the quantised program. The CMSIS-NN convolution
+	  takes its working buffer from here.
 
 config APP_CAMERA
 	bool "Classify live frames from the OV2640 camera"
@@ -42,5 +57,34 @@ config APP_CAMERA_SWAP_BYTES
 	help
 	  Enable if the ASCII preview printed by the firmware looks like noise.
 	  The DVP interface may deliver RGB565 with the two bytes swapped.
+
+config APP_SCREEN
+	bool "Show the frame and the result on a display"
+	depends on DISPLAY
+	help
+	  Draw what the model sees, the digit and the time each program took
+	  on the display chosen in devicetree (zephyr,display). Written for
+	  the Seeed Studio Round Display for XIAO (GC9A01, 240 x 240): build
+	  with --shield seeed_xiao_round_display and display.conf.
+
+config APP_SCREEN_SWAP_BYTES
+	bool "Send the high byte of each pixel first"
+	default y
+	depends on APP_SCREEN
+	help
+	  The GC9A01 driver passes the buffer to the panel as it is, and the
+	  panel reads the high byte of an RGB565 pixel first. At start-up the
+	  screen shows three squares that must be red, green and blue from
+	  left to right; if they are not, turn this off.
+
+config APP_SCREEN_BAND_ROWS
+	int "Rows drawn and sent to the panel at a time"
+	default 40
+	range 8 240
+	depends on APP_SCREEN
+	help
+	  The picture is drawn in horizontal bands so that no full frame
+	  buffer is needed: 240 x 240 pixels would take 115 KiB, a band of 40
+	  rows takes 19 KiB.
 
 endmenu

@@ -6,7 +6,7 @@
 #   west init -m https://github.com/eoinjordan/executorch-zephyr-xiao-esp32s3 ws
 #   cd ws && west update
 #
-# Pulls Zephyr (only the Espressif HAL from its manifest) and ExecuTorch as
+# Pulls Zephyr (only the Espressif HAL and CMSIS-NN from its manifest) and ExecuTorch as
 # the external module documented at
 # https://docs.zephyrproject.org/latest/develop/manifest/external/executorch.html
 
@@ -24,6 +24,7 @@ manifest:
       import:
         name-allowlist:
           - hal_espressif
+          - cmsis-nn
 
     - name: executorch
       remote: pytorch
