@@ -194,6 +194,10 @@ either, so this is not the ceiling for the chip.
 
 ### 7. Round display
 
+![The round display showing the camera crop, the digit and the time of each program](docs/images/round-display.jpg)
+
+*The display on the board while the firmware runs: camera crop, digit, and one line per program with its time.*
+
 With the [Seeed Studio Round Display for XIAO](https://wiki.seeedstudio.com/get_start_round_display/)
 (GC9A01, 240 x 240) under the board, the firmware shows what the model is given, the digit,
 and the time each program took:
