@@ -13,6 +13,12 @@
 # path next to its DSP and Helium ones, and that path builds for any target,
 # so the quantised kernels run here too. -DAPP_CMSIS_NN=OFF leaves them and
 # the int8 program out.
+#
+# With CONFIG_APP_LEGO (lego.conf) the application is the brick detector
+# instead, src/lego.cpp, and the two programs are those of BrickNet:
+#
+#   model/lego_bricknet.pte           fp32, portable kernels
+#   model/lego_bricknet_cmsis_nn.pte  int8, cortex_m operators on CMSIS-NN
 
 cmake_minimum_required(VERSION 3.24)
 
@@ -28,7 +34,15 @@ set(ET_PTE_Q_FILE_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/model/mnist_tiny_cmsis_nn.pte"
     CACHE FILEPATH "Path to the int8 (cortex_m) ExecuTorch .pte model to embed"
 )
-foreach(_var ET_PTE_FILE_PATH ET_PTE_Q_FILE_PATH)
+set(LEGO_PTE_FILE_PATH
+    "${CMAKE_CURRENT_SOURCE_DIR}/model/lego_bricknet.pte"
+    CACHE FILEPATH "Path to the fp32 BrickNet .pte (CONFIG_APP_LEGO)"
+)
+set(LEGO_PTE_Q_FILE_PATH
+    "${CMAKE_CURRENT_SOURCE_DIR}/model/lego_bricknet_cmsis_nn.pte"
+    CACHE FILEPATH "Path to the int8 (cortex_m) BrickNet .pte (CONFIG_APP_LEGO)"
+)
+foreach(_var ET_PTE_FILE_PATH ET_PTE_Q_FILE_PATH LEGO_PTE_FILE_PATH LEGO_PTE_Q_FILE_PATH)
   if(NOT IS_ABSOLUTE "${${_var}}")
     get_filename_component(
       ${_var} "${${_var}}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -55,6 +69,22 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(executorch_xiao_esp32s3)
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
+# The application mode is a Kconfig choice, known only from here on.
+if(CONFIG_APP_LEGO)
+  set(ET_PTE_FILE_PATH "${LEGO_PTE_FILE_PATH}")
+  set(ET_PTE_Q_FILE_PATH "${LEGO_PTE_Q_FILE_PATH}")
+  set(_lego_models "${ET_PTE_FILE_PATH}")
+  if(APP_CMSIS_NN)
+    list(APPEND _lego_models "${ET_PTE_Q_FILE_PATH}")
+  endif()
+  foreach(_pte ${_lego_models})
+    if(NOT EXISTS "${_pte}")
+      message(FATAL_ERROR "Model not found at ${_pte}. Run train/train_lego.py and "
+                          "train/export_lego.py.")
+    endif()
+  endforeach()
+endif()
 
 set(CMAKE_CXX_FLAGS
     "${CMAKE_CXX_FLAGS} -Wall -Wno-switch -Wno-float-conversion -ffunction-sections -fdata-sections"
@@ -186,7 +216,11 @@ if(TARGET zephyr_generated_headers)
   endforeach()
 endif()
 
-target_sources(app PRIVATE src/main.cpp)
+if(CONFIG_APP_LEGO)
+  target_sources(app PRIVATE src/lego.cpp)
+else()
+  target_sources(app PRIVATE src/main.cpp)
+endif()
 target_sources_ifdef(CONFIG_APP_CAMERA app PRIVATE src/camera.c)
 target_sources_ifdef(CONFIG_APP_SCREEN app PRIVATE src/screen.c)
 

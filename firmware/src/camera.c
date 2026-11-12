@@ -103,15 +103,18 @@ int app_camera_init(void)
 	return 0;
 }
 
+/* RGB565 pixel at p as a host-order value. */
+static inline uint16_t rgb565_at(const uint8_t *p)
+{
+	if (IS_ENABLED(CONFIG_APP_CAMERA_SWAP_BYTES)) {
+		return (uint16_t)((p[0] << 8) | p[1]);
+	}
+	return (uint16_t)(p[0] | (p[1] << 8));
+}
+
 static inline uint8_t rgb565_to_gray(const uint8_t *p)
 {
-	uint16_t v;
-
-	if (IS_ENABLED(CONFIG_APP_CAMERA_SWAP_BYTES)) {
-		v = (uint16_t)((p[0] << 8) | p[1]);
-	} else {
-		v = (uint16_t)(p[0] | (p[1] << 8));
-	}
+	uint16_t v = rgb565_at(p);
 	uint32_t r = ((v >> 11) & 0x1f) << 3;
 	uint32_t g = ((v >> 5) & 0x3f) << 2;
 	uint32_t b = (v & 0x1f) << 3;
@@ -119,6 +122,52 @@ static inline uint8_t rgb565_to_gray(const uint8_t *p)
 	/* ITU-R BT.601 luma, integer weights summing to 256 */
 	return (uint8_t)((77 * r + 150 * g + 29 * b) >> 8);
 }
+
+#ifdef CONFIG_APP_LEGO
+/* The newest frame as the brick detector wants it: the centre square in
+ * colour, box-reduced to 96 x 96. Kept fresh by the thread for the reason
+ * given below.
+ */
+static uint16_t latest_rgb[APP_RGB_SIDE * APP_RGB_SIDE];
+
+static void reduce_rgb(const uint8_t *frame, uint16_t *out)
+{
+	const uint32_t w = fmt.width;
+	const uint32_t h = fmt.height;
+	const uint32_t side = (w < h) ? w : h;
+	const uint32_t x0 = (w - side) / 2;
+	const uint32_t y0 = (h - side) / 2;
+
+	for (uint32_t oy = 0; oy < APP_RGB_SIDE; oy++) {
+		uint32_t ya = y0 + (oy * side) / APP_RGB_SIDE;
+		uint32_t yb = y0 + ((oy + 1) * side) / APP_RGB_SIDE;
+
+		for (uint32_t ox = 0; ox < APP_RGB_SIDE; ox++) {
+			uint32_t xa = x0 + (ox * side) / APP_RGB_SIDE;
+			uint32_t xb = x0 + ((ox + 1) * side) / APP_RGB_SIDE;
+			uint32_t r = 0, g = 0, b = 0, n = 0;
+
+			for (uint32_t y = ya; y < yb; y++) {
+				const uint8_t *row = frame + y * fmt.pitch;
+
+				for (uint32_t x = xa; x < xb; x++) {
+					uint16_t v = rgb565_at(row + 2 * x);
+
+					r += (v >> 11) & 0x1f;
+					g += (v >> 5) & 0x3f;
+					b += v & 0x1f;
+					n++;
+				}
+			}
+			if (n == 0) {
+				n = 1;
+			}
+			out[oy * APP_RGB_SIDE + ox] =
+				(uint16_t)(((r / n) << 11) | ((g / n) << 5) | (b / n));
+		}
+	}
+}
+#endif /* CONFIG_APP_LEGO */
 
 /* The newest frame, already reduced to 28x28. A thread keeps it fresh so the
  * driver always gets its buffers back at once: with two buffers it drops a
@@ -149,6 +198,23 @@ static int grab(void)
 	const uint32_t y0 = (h - side) / 2;
 	const uint8_t *frame = vbuf->buffer;
 
+#ifdef CONFIG_APP_LEGO
+	/* Reduced straight into the shared picture: a second copy would cost
+	 * 18 KiB, and the reader only waits a few milliseconds. */
+	k_mutex_lock(&latest_lock, K_FOREVER);
+	reduce_rgb(frame, latest_rgb);
+	k_mutex_unlock(&latest_lock);
+	ret = video_enqueue(cam, vbuf);
+	if (ret < 0) {
+		LOG_ERR("video_enqueue: %d", ret);
+		return ret;
+	}
+	k_sem_give(&latest_ready);
+	ARG_UNUSED(x0);
+	ARG_UNUSED(y0);
+
+	return 0;
+#else
 	static uint8_t gray[APP_IMG_SIDE * APP_IMG_SIDE];
 
 	for (uint32_t oy = 0; oy < APP_IMG_SIDE; oy++) {
@@ -186,6 +252,7 @@ static int grab(void)
 	k_sem_give(&latest_ready);
 
 	return 0;
+#endif /* CONFIG_APP_LEGO */
 }
 
 static void grab_thread(void *a, void *b, void *c)
@@ -199,6 +266,20 @@ static void grab_thread(void *a, void *b, void *c)
 }
 
 K_THREAD_STACK_DEFINE(grab_stack, 2048);
+
+#ifdef CONFIG_APP_LEGO
+int app_camera_capture_rgb565(uint16_t *out)
+{
+	if (k_sem_take(&latest_ready, K_MSEC(2000)) != 0) {
+		LOG_ERR("no frame from the camera");
+		return -EIO;
+	}
+	k_mutex_lock(&latest_lock, K_FOREVER);
+	memcpy(out, latest_rgb, sizeof(latest_rgb));
+	k_mutex_unlock(&latest_lock);
+	return 0;
+}
+#endif
 
 int app_camera_capture(float *out, uint8_t *preview, float mean, float std)
 {

@@ -24,6 +24,16 @@ int app_camera_init(void);
  */
 int app_camera_capture(float *out, uint8_t *preview, float mean, float std);
 
+/* Side of the colour picture for the brick detector (CONFIG_APP_LEGO). */
+#define APP_RGB_SIDE 96
+
+/* Block for the next frame, centre-crop to a square and box-reduce it to
+ * 96 x 96 RGB565 in host byte order (`out`, row-major, 9216 pixels).
+ * Only with CONFIG_APP_LEGO, which makes the capture thread keep the colour
+ * picture and not the 28x28 grayscale one.
+ */
+int app_camera_capture_rgb565(uint16_t *out);
+
 #ifdef __cplusplus
 }
 #endif

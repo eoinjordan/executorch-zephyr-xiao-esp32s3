@@ -49,6 +49,15 @@ void screen_fill(int x, int y, int w, int h, uint16_t color);
 void screen_text(int x, int y, const char *s, int scale, uint16_t color);
 /* 8-bit grayscale image with an integer scale (28 x 28 at scale 3 is 84 x 84). */
 void screen_gray(int x, int y, const uint8_t *img, int w, int h, int scale);
+/* RGB565 image in host byte order with an integer scale. */
+void screen_rgb565(int x, int y, const uint16_t *img, int w, int h, int scale);
+/* The outline of a rectangle, t pixels thick. */
+void screen_frame(int x, int y, int w, int h, int t, uint16_t color);
+
+/* Make the next screen_render() also print what it draws on the console:
+ * "SCR 240 240 rgb565", one line of four hex digits a pixel for each row,
+ * then "END SCR". tools/lego_capture.py turns that into a PNG. */
+void screen_dump_next(void);
 
 #ifdef __cplusplus
 }

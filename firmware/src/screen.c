@@ -19,6 +19,7 @@ static const struct device *const disp = DEVICE_DT_GET(DT_CHOSEN(zephyr_display)
 static uint16_t band[SCREEN_W * BAND_ROWS];
 static int band_y0;
 static bool ready;
+static bool dump_next;
 
 /* RGB565 as the panel reads it. The GC9A01 takes the high byte first and
  * the driver sends the buffer unchanged, so on a little-endian CPU the two
@@ -26,6 +27,26 @@ static bool ready;
 static inline uint16_t pack(uint16_t c)
 {
 	return IS_ENABLED(CONFIG_APP_SCREEN_SWAP_BYTES) ? (uint16_t)((c << 8) | (c >> 8)) : c;
+}
+
+/* The band as text: one line a row, four hex digits a pixel. */
+static void dump_band(int rows)
+{
+	static const char hex[] = "0123456789abcdef";
+	static char line[SCREEN_W * 4 + 1];
+
+	for (int y = 0; y < rows; y++) {
+		for (int x = 0; x < SCREEN_W; x++) {
+			uint16_t c = pack(band[y * SCREEN_W + x]); /* pack() undoes itself */
+
+			line[4 * x] = hex[c >> 12];
+			line[4 * x + 1] = hex[(c >> 8) & 0xf];
+			line[4 * x + 2] = hex[(c >> 4) & 0xf];
+			line[4 * x + 3] = hex[c & 0xf];
+		}
+		line[SCREEN_W * 4] = '\0';
+		printk("%s\n", line);
+	}
 }
 
 static inline void put(int x, int y, uint16_t packed)
@@ -74,6 +95,9 @@ void screen_render(screen_draw_fn draw, void *ctx)
 	if (!ready) {
 		return;
 	}
+	if (dump_next) {
+		printk("SCR %d %d rgb565\n", SCREEN_W, SCREEN_H);
+	}
 	for (band_y0 = 0; band_y0 < SCREEN_H; band_y0 += BAND_ROWS) {
 		int rows = MIN(BAND_ROWS, SCREEN_H - band_y0);
 		int ret;
@@ -82,14 +106,26 @@ void screen_render(screen_draw_fn draw, void *ctx)
 		if (draw != NULL) {
 			draw(ctx);
 		}
+		if (dump_next) {
+			dump_band(rows);
+		}
 		desc.height = rows;
 		desc.buf_size = (uint32_t)rows * SCREEN_W * sizeof(uint16_t);
 		ret = display_write(disp, 0, band_y0, &desc, band);
 		if (ret != 0) {
 			printk("screen: display_write %d\n", ret);
-			return;
+			break;
 		}
 	}
+	if (dump_next) {
+		printk("END SCR\n");
+		dump_next = false;
+	}
+}
+
+void screen_dump_next(void)
+{
+	dump_next = true;
 }
 
 void screen_fill(int x, int y, int w, int h, uint16_t color)
@@ -131,6 +167,37 @@ void screen_text(int x, int y, const char *s, int scale, uint16_t color)
 			}
 		}
 	}
+}
+
+void screen_rgb565(int x, int y, const uint16_t *img, int w, int h, int scale)
+{
+	if (y + h * scale <= band_y0 || y >= band_y0 + BAND_ROWS) {
+		return;
+	}
+	for (int iy = 0; iy < h; iy++) {
+		int py = y + iy * scale;
+
+		if (py + scale <= band_y0 || py >= band_y0 + BAND_ROWS) {
+			continue;
+		}
+		for (int ix = 0; ix < w; ix++) {
+			uint16_t c = pack(img[iy * w + ix]);
+
+			for (int sy = 0; sy < scale; sy++) {
+				for (int sx = 0; sx < scale; sx++) {
+					put(x + ix * scale + sx, py + sy, c);
+				}
+			}
+		}
+	}
+}
+
+void screen_frame(int x, int y, int w, int h, int t, uint16_t color)
+{
+	screen_fill(x, y, w, t, color);
+	screen_fill(x, y + h - t, w, t, color);
+	screen_fill(x, y, t, h, color);
+	screen_fill(x + w - t, y, t, h, color);
 }
 
 void screen_gray(int x, int y, const uint8_t *img, int w, int h, int scale)

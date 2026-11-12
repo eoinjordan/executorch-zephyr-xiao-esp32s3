@@ -58,6 +58,51 @@ config APP_CAMERA_SWAP_BYTES
 	  Enable if the ASCII preview printed by the firmware looks like noise.
 	  The DVP interface may deliver RGB565 with the two bytes swapped.
 
+config APP_LEGO
+	bool "Detect bricks by colour instead of reading digits"
+	help
+	  Build the brick detector (src/lego.cpp) in place of the MNIST
+	  demo: BrickNet finds yellow, white and red bricks and a blue parts
+	  bin in the camera picture and prints one DET line a frame for a
+	  host that drives an arm. Enable with lego.conf, which also turns
+	  on the PSRAM that the fp32 program needs.
+
+if APP_LEGO
+
+config APP_LEGO_METHOD_POOL_SIZE
+	int "Method allocator pool size of the int8 BrickNet in bytes"
+	default 81920
+	help
+	  Static pool in internal RAM for the quantised program. The firmware
+	  prints how much of it is used.
+
+config APP_LEGO_TEMP_POOL_SIZE
+	int "Temporary allocator pool size of each BrickNet program in bytes"
+	default 8192
+
+config APP_LEGO_FP32_POOL_SIZE
+	int "Method allocator pool size of the fp32 BrickNet in bytes"
+	default 393216
+	help
+	  Taken from the PSRAM at start-up. A 96 x 96 x 3 picture in float is
+	  110 KiB before the first layer has run.
+
+config APP_LEGO_INT8_STEPS
+	int "Largest difference of the int8 self-test in output steps"
+	default 8
+	help
+	  The self-test of the quantised program passes when no logit is
+	  further than this many quantisation steps from the logits of the
+	  quantised graph in PyTorch and the same objects are found.
+
+config APP_LEGO_LIVE_FP32
+	bool "Run the fp32 program on camera frames"
+	help
+	  The camera loop uses the int8 program when the firmware has it.
+	  Turn this on to use the fp32 one, which is slower.
+
+endif # APP_LEGO
+
 config APP_SCREEN
 	bool "Show the frame and the result on a display"
 	depends on DISPLAY
