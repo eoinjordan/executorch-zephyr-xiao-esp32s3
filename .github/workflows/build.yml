@@ -21,6 +21,11 @@ jobs:
         run: python train/train_mnist.py --epochs 1 --limit 10000 --pte /tmp/ci.pte --header /tmp/ci_test_input.h --state-dict /tmp/ci.pt
       - name: Run committed .pte on the host runtime
         run: python train/run_pte_host.py
+      - name: Brick detector, train (smoke) and export
+        run: |
+          python train/train_lego.py --train 600 --val 200 --epochs 1 --state-dict /tmp/lego.pt
+          python train/export_lego.py --state-dict /tmp/lego.pt --val 200 --calibration 100 --pte /tmp/lego.pte --pte-int8 /tmp/lego_q.pte --header /tmp/lego_test_input.h
+          python tools/lego_reader.py --demo
       - uses: actions/upload-artifact@v4
         with:
           name: ci-model
@@ -46,6 +51,9 @@ jobs:
             extra: ' "-DEXTRA_CONF_FILE=camera.conf;display.conf" -DEXTRA_DTC_OVERLAY_FILE=round_display.overlay'
           - board: xiao_esp32s3/esp32s3/procpu
             extra: " -DAPP_CMSIS_NN=OFF"
+          - board: xiao_esp32s3/esp32s3/procpu/sense
+            shield: " --shield seeed_xiao_round_display"
+            extra: ' "-DEXTRA_CONF_FILE=camera.conf;display.conf;lego.conf" -DEXTRA_DTC_OVERLAY_FILE=round_display.overlay'
     steps:
       - uses: actions/checkout@v4
         with:
