@@ -6,6 +6,8 @@ executorch==1.5.1
 torchvision
 pillow
 pyserial
+# The int8 export (CortexMQuantizer) imports the Arm backend, which needs this.
+tosa-tools==2026.5.0
 west
 cmake<4.0.0
 ninja

@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
-        run: pip install executorch==1.5.1 torchvision --extra-index-url https://download.pytorch.org/whl/cpu
+        run: pip install executorch==1.5.1 torchvision pillow pyserial tosa-tools==2026.5.0 --extra-index-url https://download.pytorch.org/whl/cpu
       - name: Train (smoke) and export
         run: python train/train_mnist.py --epochs 1 --limit 10000 --pte /tmp/ci.pte --header /tmp/ci_test_input.h --state-dict /tmp/ci.pt
       - name: Run committed .pte on the host runtime
