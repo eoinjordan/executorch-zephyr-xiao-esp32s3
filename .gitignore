@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 train/data/
 train/out/
+data/
 build/
 build-*/
 twister-out*/
