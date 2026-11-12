@@ -58,6 +58,14 @@ config APP_CAMERA_SWAP_BYTES
 	  Enable if the ASCII preview printed by the firmware looks like noise.
 	  The DVP interface may deliver RGB565 with the two bytes swapped.
 
+config APP_CAMERA_ROTATE_180
+	bool "Turn the camera picture half a turn"
+	depends on APP_CAMERA
+	help
+	  Enable when the camera board is mounted upside down, for example
+	  on the gripper-top holder with the cover fitted. The picture the
+	  model sees, the screen and the DET coordinates are then all upright.
+
 config APP_LEGO
 	bool "Detect bricks by colour instead of reading digits"
 	help

@@ -112,6 +112,17 @@ static inline uint16_t rgb565_at(const uint8_t *p)
 	return (uint16_t)(p[0] | (p[1] << 8));
 }
 
+/* Where output pixel (ox, oy) of a side x side picture is stored: turned half
+ * a turn when the camera board is mounted upside down.
+ */
+static inline uint32_t out_index(uint32_t ox, uint32_t oy, uint32_t side)
+{
+	if (IS_ENABLED(CONFIG_APP_CAMERA_ROTATE_180)) {
+		return (side - 1 - oy) * side + (side - 1 - ox);
+	}
+	return oy * side + ox;
+}
+
 static inline uint8_t rgb565_to_gray(const uint8_t *p)
 {
 	uint16_t v = rgb565_at(p);
@@ -162,7 +173,7 @@ static void reduce_rgb(const uint8_t *frame, uint16_t *out)
 			if (n == 0) {
 				n = 1;
 			}
-			out[oy * APP_RGB_SIDE + ox] =
+			out[out_index(ox, oy, APP_RGB_SIDE)] =
 				(uint16_t)(((r / n) << 11) | ((g / n) << 5) | (b / n));
 		}
 	}
@@ -236,7 +247,7 @@ static int grab(void)
 			}
 			uint32_t v = n ? sum / n : 0;
 
-			gray[oy * APP_IMG_SIDE + ox] = (uint8_t)v;
+			gray[out_index(ox, oy, APP_IMG_SIDE)] = (uint8_t)v;
 		}
 	}
 
